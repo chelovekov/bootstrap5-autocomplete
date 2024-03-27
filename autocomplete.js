@@ -1209,6 +1209,9 @@ class Autocomplete {
     }
 
     if (this._config.liveServerFetchFunction !== null) {
+      this._searchInput.classList.add(LOADING_CLASS);
+      this._config.onBeforeFetch(this);
+
       this._config.liveServerFetchFunction(params)
           .then((suggestions) => {
             if (suggestions instanceof String) {
