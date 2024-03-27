@@ -66,6 +66,7 @@
  * @property {String} serverDataKey By default: data
  * @property {Object} fetchOptions Any other fetch options (https://developer.mozilla.org/en-US/docs/Web/API/fetch#syntax)
  * @property {Boolean} liveServer Should the endpoint be called each time on input
+ * @property {Promise} liveServerFetchFunction Live server fetch function
  * @property {Boolean} noCache Prevent caching by appending a timestamp
  * @property {Number} debounceTime Debounce time for live server
  * @property {String} notFoundMessage Display a no suggestions found message. Leave empty to disable
@@ -113,6 +114,7 @@ const DEFAULTS = {
   serverDataKey: "data",
   fetchOptions: {},
   liveServer: false,
+  liveServerFetchFunction: null,
   noCache: true,
   debounceTime: 300,
   notFoundMessage: "",
@@ -1206,44 +1208,72 @@ class Autocomplete {
       }
     }
 
-    const urlParams = new URLSearchParams(params);
-    let url = this._config.server;
-    let fetchOptions = Object.assign(this._config.fetchOptions, {
-      method: this._config.serverMethod || "GET",
-      signal: this._abortController.signal,
-    });
+    if (this._config.liveServerFetchFunction !== null) {
+      this._config.liveServerFetchFunction(params)
+          .then((suggestions) => {
+            if (suggestions instanceof String) {
+              suggestions = JSON.parse(suggestions)
+            }
+            const data = nested(this._config.serverDataKey, suggestions) || suggestions;
 
-    if (fetchOptions.method === "POST") {
-      fetchOptions.body = urlParams;
-    } else {
-      url += "?" + urlParams.toString();
-    }
-
-    this._searchInput.classList.add(LOADING_CLASS);
-    this._config.onBeforeFetch(this);
-
-    fetch(url, fetchOptions)
-      .then((r) => this._config.onServerResponse(r, this))
-      .then((suggestions) => {
-        const data = nested(this._config.serverDataKey, suggestions) || suggestions;
-        this.setData(data);
-        this._setHiddenVal();
-        this._abortController = null;
-        if (show) {
-          this._showSuggestions();
-        }
-      })
-      .catch((e) => {
-        // Current version of Firefox rejects the promise with a DOMException
-        if (e.name === "AbortError" || this._abortController.signal.aborted) {
-          return;
-        }
-        console.error(e);
-      })
-      .finally((e) => {
-        this._searchInput.classList.remove(LOADING_CLASS);
-        this._config.onAfterFetch(this);
+            this.setData(data);
+            this._setHiddenVal();
+            this._abortController = null;
+            if (show) {
+              this._showSuggestions();
+            }
+          })
+          .catch((e) => {
+            // Current version of Firefox rejects the promise with a DOMException
+            if (e.name === "AbortError" || this._abortController.signal.aborted) {
+              return;
+            }
+            console.error(e);
+          })
+          .finally((e) => {
+            this._searchInput.classList.remove(LOADING_CLASS);
+            this._config.onAfterFetch(this);
+          });
+    }else{
+      const urlParams = new URLSearchParams(params);
+      let url = this._config.server;
+      let fetchOptions = Object.assign(this._config.fetchOptions, {
+        method: this._config.serverMethod || "GET",
+        signal: this._abortController.signal,
       });
+
+      if (fetchOptions.method === "POST") {
+        fetchOptions.body = urlParams;
+      } else {
+        url += "?" + urlParams.toString();
+      }
+
+      this._searchInput.classList.add(LOADING_CLASS);
+      this._config.onBeforeFetch(this);
+
+      fetch(url, fetchOptions)
+          .then((r) => this._config.onServerResponse(r, this))
+          .then((suggestions) => {
+            const data = nested(this._config.serverDataKey, suggestions) || suggestions;
+            this.setData(data);
+            this._setHiddenVal();
+            this._abortController = null;
+            if (show) {
+              this._showSuggestions();
+            }
+          })
+          .catch((e) => {
+            // Current version of Firefox rejects the promise with a DOMException
+            if (e.name === "AbortError" || this._abortController.signal.aborted) {
+              return;
+            }
+            console.error(e);
+          })
+          .finally((e) => {
+            this._searchInput.classList.remove(LOADING_CLASS);
+            this._config.onAfterFetch(this);
+          });
+    }
   }
 
   // #endregion
